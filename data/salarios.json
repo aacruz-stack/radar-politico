@@ -1,0 +1,13 @@
+{
+  "atualizadoManualmenteEm": "2026-10-19",
+  "aviso": "Valores brutos mensais, estáticos. Reproduzidos do painel anterior (Apps Script) e AINDA NÃO reconferidos contra a norma original: revise antes de divulgar e atualize quando houver reajuste.",
+  "cargos": [
+    {"cargo": "Presidente da República", "valor": 46366.19, "referencia": "Teto do funcionalismo (subsídio de ministro do STF); jun/2025, Portal da Transparência", "fonte": "https://www.gov.br/transparencia/"},
+    {"cargo": "Governador de São Paulo", "valor": 36301.53, "referencia": "Subsídio mensal base, 2026", "fonte": "https://www.transparencia.sp.gov.br/"},
+    {"cargo": "Prefeito de São Paulo", "valor": 38039.38, "referencia": "Valor bruto, 2025", "fonte": "https://prefeitura.sp.gov.br/"},
+    {"cargo": "Deputado Federal", "valor": 46366.19, "referencia": "fev/2025, Decreto Legislativo nº 172/2022 (mesmo valor do senador)", "fonte": "https://www.camara.leg.br/"},
+    {"cargo": "Senador", "valor": 46366.19, "referencia": "fev/2025, mesmo valor do deputado federal", "fonte": "https://www12.senado.leg.br/transparencia"},
+    {"cargo": "Deputado Estadual de São Paulo", "valor": 34774.64, "referencia": "2026, teto de 75% do subsídio de deputado federal", "fonte": "https://www.al.sp.gov.br/"},
+    {"cargo": "Vereador de São Paulo", "valor": 26080.98, "referencia": "fev/2025, Câmara Municipal de SP", "fonte": "https://www.saopaulo.sp.leg.br/transparencia/salarios-abertos/"}
+  ]
+}
