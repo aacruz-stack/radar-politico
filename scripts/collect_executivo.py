@@ -5,6 +5,7 @@
                        defina PORTAL_TRANSPARENCIA_KEY (cadastro gratuito por e-mail).
   Governo de SP     -> sem API/CSV estável identificada; ver README ("Fontes que ficaram de fora").
 """
+import calendar
 import csv
 import html
 import json
@@ -13,6 +14,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import urllib.parse
 import urllib.request
 from collections import defaultdict
@@ -72,6 +74,7 @@ def portal(chave_api, caminho, params):
     saida, pag = [], 1
     while pag <= 40:
         q = "&".join(f"{k}={v}" for k, v in {**params, "pagina": pag}.items())
+        time.sleep(0.8)  # limite do Portal: ~90 requisições/minuto
         try:
             d = c.get_json(f"{PORTAL}/{caminho}?{q}", headers={"chave-api-dados": chave_api})
         except Exception as e:
@@ -94,8 +97,12 @@ def presidencia():
     cart = portal(chave_api, "cartoes", {"mesExtratoInicio": f"01/{ano}",
                                          "mesExtratoFim": c.agora().strftime("%m/%Y"),
                                          "codigoOrgao": ORGAO_PLANALTO})
-    viag = portal(chave_api, "viagens", {"dataIdaDe": ini, "dataIdaAte": fim, "dataRetornoDe": ini,
-                                         "dataRetornoAte": fim, "codigoOrgao": ORGAO_PLANALTO})
+    viag = []
+    for mes in range(1, c.agora().month + 1):  # o Portal só aceita janelas de 1 mês em /viagens
+        ult = calendar.monthrange(ano, mes)[1]
+        ini_m, fim_m = f"01/{mes:02d}/{ano}", f"{ult:02d}/{mes:02d}/{ano}"
+        viag += portal(chave_api, "viagens", {"dataIdaDe": ini_m, "dataIdaAte": fim_m, "dataRetornoDe": ini_m,
+                                              "dataRetornoAte": fim_m, "codigoOrgao": ORGAO_PLANALTO})
     gastos_cartao = [{
         "portador": (x.get("portador") or {}).get("nome"), "estabelecimento": (x.get("estabelecimento") or {}).get("nome"),
         "data": x.get("dataTransacao"), "valor": num(str(x.get("valorTransacao", "0"))),
