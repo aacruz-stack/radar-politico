@@ -3,7 +3,13 @@
 Plataforma pessoal de estudos (LMS) com 7 módulos e 8 aulas, do SQL até agentes de IA.
 React 19 + Vite + Tailwind CSS 4. Progresso e anotações ficam salvos no `localStorage` do navegador.
 
-## Rodar
+## Acessar online
+https://aacruz-stack.github.io/radar-politico/
+
+Publicado pelo workflow `.github/workflows/trilha-pages.yml` a cada push em `main` que altere `trilha-dados/`.
+Progresso e anotações ficam no navegador de cada dispositivo; use exportar/importar backup para levá-los de um para outro.
+
+## Rodar local
     cd trilha-dados
     npm install
     npm run dev        # abre em http://localhost:5173
