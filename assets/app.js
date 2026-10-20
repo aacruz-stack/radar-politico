@@ -15,7 +15,7 @@
 
   var D = { casas: {}, salarios: null, executivo: null, fichas: {}, meta: null };
   var view = document.getElementById('view');
-  var estado = { casa: 'camara', q: '', partido: '', uf: '', ordem: 'gasto', vcasa: '', vq: '', vdias: '120' };
+  var estado = { casa: 'todos', pcasa: 'camara', dsel: 'presidente', dq: '', q: '', partido: '', uf: '', ordem: 'gasto', vcasa: '', vq: '', vdias: '120' };
 
   /* ---------- utilidades ---------- */
   function esc(s) {
@@ -73,7 +73,7 @@
 
   /* ---------- painel ---------- */
   function vPainel() {
-    var casa = estado.casa, anos = anoDados(casa), ano = estado.ano && anos.indexOf(estado.ano) >= 0 ? estado.ano : anos[0];
+    var casa = estado.pcasa, anos = anoDados(casa), ano = estado.ano && anos.indexOf(estado.ano) >= 0 ? estado.ano : anos[0];
     estado.ano = ano;
     var ps = D.casas[casa].parlamentares;
     var comGasto = ps.filter(function (p) { return gastoAno(p, ano) > 0; });
@@ -89,9 +89,9 @@
     var partidos = Object.keys(porPartido).map(function (k) { return { p: k, n: porPartido[k].n, t: porPartido[k].total, m: porPartido[k].total / porPartido[k].n }; })
       .sort(function (a, b) { return b.m - a.m; });
     var sal = salarioDe(casa);
-    var h = '<h2>Quem mais gasta</h2><p class="muted">' + esc(CASAS[casa].verba) + ' · ' + esc(ano) + ' (ano em curso é parcial)</p>' + seletorCasa('casa', 'painel');
+    var h = '<h2>Quem mais gasta</h2><p class="muted">' + esc(CASAS[casa].verba) + ' · ' + esc(ano) + ' (ano em curso é parcial)</p>' + seletorCasa('pcasa', 'painel');
     if (!comGasto.length) {
-      return h + '<div class="notice warn">Sem dados de gastos para esta casa. ' + (casa === 'cmsp' ? 'Os custos de gabinete dos vereadores ainda não foram integrados; veja “Fontes e limites”.' : '') + '</div>';
+      return h + '<div class="notice warn">Sem dados de gastos para esta casa. ' +'' + '</div>';
     }
     h += '<div class="kpis"><div class="card kpi"><div class="l">Total gasto</div><div class="v">' + R(total) + '</div></div>' +
       '<div class="card kpi"><div class="l">Média por parlamentar</div><div class="v">' + R(total / comGasto.length) + '</div></div>' +
@@ -104,21 +104,35 @@
     });
     h += '</tbody></table></div><h3 style="margin-top:20px">Por partido (média por parlamentar)</h3><div class="tablewrap"><table><thead><tr><th>Partido</th><th class="num">Parlamentares</th><th class="num">Total</th><th class="num">Média</th></tr></thead><tbody>';
     partidos.forEach(function (x) { h += '<tr><td>' + esc(x.p) + '</td><td class="num">' + x.n + '</td><td class="num">' + R(x.t) + '</td><td class="num">' + R(x.m) + '</td></tr>'; });
-    return h + '</tbody></table></div>' + fonteCasa(casa);
+    return h + '</tbody></table></div><p style="margin-top:12px"><a href="#/parlamentares" data-set-casa="' + casa + '">Ver todos os ' + ps.length + ' (' + esc(CASAS[casa].curto.toLowerCase()) + ') com o gasto de cada um &rarr;</a></p>' + fonteCasa(casa);
   }
   function fonteCasa(casa) {
     var c = D.casas[casa];
     return '<p class="sticky-note">Fonte: ' + (c.fontes || []).map(function (f) { return linkFonte(f, f.replace(/^https?:\/\//, '')); }).join(' · ') + ' · atualizado em ' + esc(dataHora(c.atualizadoEm)) + '</p>';
   }
-  function seletorCasa(chave, rota) {
-    return '<div class="controls" role="group" aria-label="Casa legislativa">' + ORDEM.map(function (k) {
-      return '<button class="chip" data-set="' + chave + '" data-val="' + k + '" aria-pressed="' + (estado[chave] === k) + '">' + esc(CASAS[k].curto) + '</button>';
+  function seletorCasa(chave, rota, comTodos) {
+    var itens = (comTodos ? [['todos', 'Todos']] : []).concat(ORDEM.map(function (k) { return [k, CASAS[k].curto]; }));
+    return '<div class="controls" role="group" aria-label="Casa legislativa">' + itens.map(function (x) {
+      return '<button class="chip" data-set="' + chave + '" data-val="' + x[0] + '" aria-pressed="' + (estado[chave] === x[0]) + '">' + esc(x[1]) + '</button>';
     }).join('') + '</div>';
+  }
+  function todosPoliticos() {
+    if (!D._todos) {
+      D._todos = [];
+      ORDEM.forEach(function (k) { D.casas[k].parlamentares.forEach(function (p) { D._todos.push(Object.assign({}, p, { _casa: k })); }); });
+    }
+    return D._todos;
+  }
+  function anosTodos() {
+    var a = {};
+    ORDEM.forEach(function (k) { anoDados(k).forEach(function (x) { a[x] = 1; }); });
+    return Object.keys(a).sort().reverse();
   }
 
   /* ---------- lista de parlamentares ---------- */
   function vParlamentares() {
-    var casa = estado.casa, ps = D.casas[casa].parlamentares, anos = anoDados(casa), ano = anos[0];
+    var casa = estado.casa, todos = casa === 'todos';
+    var ps = todos ? todosPoliticos() : D.casas[casa].parlamentares, anos = todos ? anosTodos() : anoDados(casa), ano = anos[0];
     var partidos = {}, ufs = {};
     ps.forEach(function (p) { if (p.partido) partidos[p.partido] = 1; if (p.uf) ufs[p.uf] = 1; });
     var lista = ps.filter(function (p) {
@@ -126,17 +140,19 @@
         (!estado.q || norm(p.nome).indexOf(norm(estado.q)) >= 0);
     });
     lista.sort(estado.ordem === 'gasto' && ano ? function (a, b) { return gastoAno(b, ano) - gastoAno(a, ano); } : function (a, b) { return a.nome.localeCompare(b.nome, 'pt-BR'); });
-    var h = '<h2>Parlamentares</h2>' + seletorCasa('casa') +
+    var h = '<h2>Todos os parlamentares e quanto gastam</h2>' + seletorCasa('casa', null, true) +
       '<div class="controls"><input type="search" id="q" placeholder="Buscar por nome" aria-label="Buscar por nome" value="' + esc(estado.q) + '">' +
       '<select id="fpartido" aria-label="Partido"><option value="">Todos os partidos</option>' + Object.keys(partidos).sort().map(function (k) { return '<option' + (k === estado.partido ? ' selected' : '') + '>' + esc(k) + '</option>'; }).join('') + '</select>' +
       (Object.keys(ufs).length > 1 ? '<select id="fuf" aria-label="UF"><option value="">Todas as UFs</option>' + Object.keys(ufs).sort().map(function (k) { return '<option' + (k === estado.uf ? ' selected' : '') + '>' + esc(k) + '</option>'; }).join('') + '</select>' : '') +
       '<select id="ordem" aria-label="Ordenar"><option value="gasto"' + (estado.ordem === 'gasto' ? ' selected' : '') + '>Maior gasto primeiro</option><option value="nome"' + (estado.ordem === 'nome' ? ' selected' : '') + '>Ordem alfabética</option></select></div>' +
       '<p class="muted small">' + lista.length + ' resultado(s)' + (ano ? ' · gasto de ' + esc(ano) : '') + '</p>' +
-      '<div class="tablewrap"><table><thead><tr><th>Parlamentar</th><th class="num">Gasto ' + esc(ano || '') + '</th></tr></thead><tbody>';
-    lista.slice(0, 200).forEach(function (p) {
-      h += '<tr class="link" data-go="#/p/' + casa + '/' + esc(p.id) + '"><td>' + pessoa(p) + '</td><td class="num">' + (ano && gastoAno(p, ano) ? R(gastoAno(p, ano)) : '—') + '</td></tr>';
+      '<div class="tablewrap"><table><thead><tr><th>Parlamentar</th>' + (todos ? '<th>Casa</th>' : '') + '<th class="num">Gasto ' + esc(ano || '') + '</th></tr></thead><tbody>';
+    var limite = todos ? 3000 : 1000;
+    lista.slice(0, limite).forEach(function (p) {
+      var k = p._casa || casa;
+      h += '<tr class="link" data-go="#/p/' + k + '/' + esc(p.id) + '"><td>' + pessoa(p) + '</td>' + (todos ? '<td class="small muted">' + esc(CASAS[k].curto) + '</td>' : '') + '<td class="num">' + (ano && gastoAno(p, ano) ? R(gastoAno(p, ano)) : '—') + '</td></tr>';
     });
-    return h + '</tbody></table></div>' + (lista.length > 200 ? '<p class="muted small">Mostrando 200; refine a busca.</p>' : '');
+    return h + '</tbody></table></div>';
   }
 
   /* ---------- perfil ---------- */
@@ -174,7 +190,7 @@
       return m ? { v: v, voto: m[1] } : null;
     }).filter(Boolean);
     h += '<h3 style="margin-top:20px">Votos nominais recentes (' + vs.length + ')</h3>';
-    if (!vs.length) h += '<p class="muted">' + (casa === 'alesp' ? 'A ALESP não publica votações nominais de plenário em dados abertos.' : casa === 'cmsp' ? 'Votos nominais dos vereadores ainda não integrados.' : 'Nenhum voto nominal no período coletado.') + '</p>';
+    if (!vs.length) h += '<p class="muted">' + (casa === 'alesp' ? 'A ALESP não publica votações nominais de plenário em dados abertos.' : casa === 'cmsp' ? 'Votos nominais dos vereadores ainda não integrados (veja “Fontes e limites”).' : 'Nenhum voto nominal no período coletado.') + '</p>';
     else {
       h += '<div class="tablewrap"><table><thead><tr><th>Data</th><th>Proposição</th><th>Voto</th></tr></thead><tbody>';
       vs.forEach(function (x) { h += '<tr><td class="mono small">' + dataBR(x.v.data) + '</td><td>' + esc(x.v.proposicao || '') + '<br><span class="muted small">' + esc((x.v.ementa || x.v.descricao || '').slice(0, 200)) + '</span></td><td>' + votoPill(x.voto) + '</td></tr>'; });
@@ -245,26 +261,49 @@
 
   /* ---------- executivo ---------- */
   function vExecutivo() {
-    var e = D.executivo || {}, sal = (D.salarios && D.salarios.cargos) || [];
-    function s(c) { var x = sal.filter(function (y) { return y.cargo === c; })[0]; return x ? '<div class="card kpi"><div class="l">Salário bruto mensal</div><div class="v">' + R(x.valor) + '</div><div class="small muted">' + esc(x.referencia) + ' · ' + linkFonte(x.fonte) + '</div></div>' : ''; }
-    var h = '<h2>Poder Executivo</h2><div class="notice">Os portais oficiais <b>não individualizam</b> gastos pessoais de Presidente, Governador ou Prefeito. Aqui mostramos o que é publicado: gastos do órgão que serve cada um.</div>';
-    h += '<h3 style="margin-top:20px">Presidente da República</h3><div class="kpis">' + s('Presidente da República') + '</div>';
-    var pr = e.presidencia;
-    if (pr && pr.disponivel) {
-      h += '<div class="kpis" style="margin-top:12px"><div class="card kpi"><div class="l">Cartão corporativo (CPGF) ' + esc(pr.ano) + '</div><div class="v">' + R(pr.totalCartao) + '</div></div></div>';
-      if (pr.cartao.length) h += '<div class="tablewrap" style="margin-top:12px"><table><thead><tr><th>Data</th><th>Estabelecimento</th><th>Portador</th><th class="num">Valor</th></tr></thead><tbody>' + pr.cartao.slice(0, 30).map(function (x) { return '<tr><td class="mono small">' + esc(x.data) + '</td><td>' + esc(x.estabelecimento) + '</td><td>' + esc(x.portador) + '</td><td class="num">' + R2(x.valor) + '</td></tr>'; }).join('') + '</tbody></table></div>';
-    } else h += '<div class="notice warn" style="margin-top:12px">Gastos da Presidência (CPGF e viagens): ' + esc((pr && pr.motivo) || 'indisponível') + ' Fonte: ' + linkFonte('https://portaldatransparencia.gov.br/', 'Portal da Transparência') + '.</div>';
-    h += '<h3 style="margin-top:20px">Governador de São Paulo</h3><div class="kpis">' + s('Governador de São Paulo') + '</div><div class="notice warn" style="margin-top:12px">Gastos: ' + esc((e.governadorSP && e.governadorSP.motivo) || 'indisponível') + ' Consulta manual: ' + linkFonte('https://www.transparencia.sp.gov.br/', 'transparencia.sp.gov.br') + '.</div>';
-    h += '<h3 style="margin-top:20px">Prefeito de São Paulo</h3><div class="kpis">' + s('Prefeito de São Paulo') + '</div>';
-    var pf = e.prefeitura;
-    if (pf) {
-      var g = pf.orgaoDoPrefeito;
-      h += '<p class="muted small" style="margin-top:12px">Execução orçamentária da Prefeitura, período ' + esc(pf.periodo) + ' (extração ' + esc(pf.extraidoEm) + '). Valores por órgão, não por pessoa.</p>';
-      if (g) h += '<div class="kpis"><div class="card kpi"><div class="l">' + esc(g.nome) + ' · pago</div><div class="v">' + R(g.pago) + '</div><div class="small muted">orçado ' + R(g.orcado) + '</div></div></div>';
-      h += '<div class="tablewrap" style="margin-top:12px"><table><thead><tr><th>Órgão</th><th class="num">Orçado</th><th class="num">Empenhado</th><th class="num">Pago</th></tr></thead><tbody>' +
-        pf.orgaos.slice(0, 20).map(function (o) { return '<tr><td>' + esc(o.nome) + '</td><td class="num">' + R(o.orcado) + '</td><td class="num">' + R(o.empenhado) + '</td><td class="num">' + R(o.pago) + '</td></tr>'; }).join('') + '</tbody></table></div>' +
-        '<p class="sticky-note">Fonte: ' + linkFonte(pf.arquivo, 'Base de dados de execução (Prefeitura de SP)') + '</p>';
+    var e = D.executivo || {}, aut = e.autoridades || [], sal = (D.salarios && D.salarios.cargos) || [];
+    var sel = aut.filter(function (x) { return x.id === estado.dsel; })[0] || aut[0];
+    var h = '<h2>Poder Executivo</h2><div class="notice">Os portais oficiais <b>não individualizam</b> gastos pessoais de Presidente, Governador ou Prefeito. Mostramos o salário, os gastos do órgão que serve cada um e <b>todos os decretos</b> recentes assinados por eles.</div>';
+    if (!sel) return h + '<p class="empty">Sem dados do Executivo.</p>';
+    h += '<div class="controls" role="group" aria-label="Autoridade">' + aut.map(function (x) {
+      return '<button class="chip" data-set="dsel" data-val="' + esc(x.id) + '" aria-pressed="' + (sel.id === x.id) + '">' + esc(x.cargo) + '</button>';
+    }).join('') + '</div>';
+    var s = sal.filter(function (y) { return y.cargo === sel.salarioCargo; })[0];
+    h += '<div class="card"><h2 style="margin:0">' + esc(sel.nome) + '</h2><div class="muted">' + esc(sel.cargo) + ' · ' + esc(sel.partido) + ' · no cargo desde ' + esc(sel.desde) + '</div></div>';
+    h += '<div class="kpis" style="margin-top:12px">' + (s ? '<div class="card kpi"><div class="l">Salário bruto mensal</div><div class="v">' + R(s.valor) + '</div><div class="small muted">' + esc(s.referencia) + ' · ' + linkFonte(s.fonte) + '</div></div>' : '');
+    var lista = e[sel.decretos] || [];
+    h += '<div class="card kpi"><div class="l">Decretos carregados</div><div class="v">' + lista.length + '</div><div class="small muted">os mais recentes do ano</div></div></div>';
+
+    // gastos do órgão
+    h += '<h3 style="margin-top:20px">Gastos</h3>';
+    if (sel.id === 'presidente') {
+      var pr = e.presidencia;
+      if (pr && pr.disponivel) {
+        h += '<div class="kpis"><div class="card kpi"><div class="l">Cartão corporativo (CPGF) ' + esc(pr.ano) + '</div><div class="v">' + R(pr.totalCartao) + '</div></div></div>';
+        if (pr.cartao.length) h += '<div class="tablewrap" style="margin-top:12px"><table><thead><tr><th>Data</th><th>Estabelecimento</th><th>Portador</th><th class="num">Valor</th></tr></thead><tbody>' + pr.cartao.slice(0, 30).map(function (x) { return '<tr><td class="mono small">' + esc(x.data) + '</td><td>' + esc(x.estabelecimento) + '</td><td>' + esc(x.portador) + '</td><td class="num">' + R2(x.valor) + '</td></tr>'; }).join('') + '</tbody></table></div>';
+      } else h += '<div class="notice warn">Cartão corporativo e viagens da Presidência: ' + esc((pr && pr.motivo) || 'indisponível') + ' Fonte: ' + linkFonte('https://portaldatransparencia.gov.br/', 'Portal da Transparência') + '.</div>';
+    } else if (sel.id === 'governador') {
+      h += '<div class="notice warn">' + esc((e.governadorSP && e.governadorSP.motivo) || 'Indisponível.') + ' Consulta manual: ' + linkFonte('https://www.transparencia.sp.gov.br/', 'transparencia.sp.gov.br') + '.</div>';
+    } else {
+      var pf = e.prefeitura;
+      if (pf) {
+        var g = pf.orgaoDoPrefeito;
+        h += '<p class="muted small">Execução orçamentária da Prefeitura, período ' + esc(pf.periodo) + '. Valores por órgão, não por pessoa.</p>';
+        if (g) h += '<div class="kpis"><div class="card kpi"><div class="l">' + esc(g.nome) + ' · pago</div><div class="v">' + R(g.pago) + '</div><div class="small muted">orçado ' + R(g.orcado) + '</div></div></div>';
+        h += '<div class="tablewrap" style="margin-top:12px"><table><thead><tr><th>Órgão</th><th class="num">Orçado</th><th class="num">Empenhado</th><th class="num">Pago</th></tr></thead><tbody>' +
+          pf.orgaos.slice(0, 15).map(function (o) { return '<tr><td>' + esc(o.nome) + '</td><td class="num">' + R(o.orcado) + '</td><td class="num">' + R(o.empenhado) + '</td><td class="num">' + R(o.pago) + '</td></tr>'; }).join('') + '</tbody></table></div>' +
+          '<p class="sticky-note">Fonte: ' + linkFonte(pf.arquivo, 'Base de dados de execução (Prefeitura de SP)') + '</p>';
+      }
     }
+
+    // decretos
+    var q = norm(estado.dq);
+    var vis = lista.filter(function (d) { return !q || norm(d.titulo + ' ' + d.ementa).indexOf(q) >= 0; });
+    h += '<h3 style="margin-top:20px">Decretos assinados</h3><div class="controls"><input type="search" id="dq" placeholder="Buscar nos decretos (tema, número, palavra)" aria-label="Buscar decretos" value="' + esc(estado.dq) + '"></div><p class="muted small">' + vis.length + ' de ' + lista.length + '</p>';
+    if (!vis.length) return h + '<p class="empty">Nenhum decreto encontrado.</p>';
+    h += '<div class="tablewrap"><table><thead><tr><th>Data</th><th>Decreto</th></tr></thead><tbody>' + vis.map(function (d) {
+      return '<tr><td class="mono small" style="white-space:nowrap">' + esc(d.data || '—') + '</td><td><b>' + (seguro(d.url) ? '<a href="' + esc(d.url) + '" target="_blank" rel="noopener noreferrer">' + esc(d.titulo) + '</a>' : esc(d.titulo)) + '</b><br><span class="muted small">' + esc(d.ementa || '') + '</span></td></tr>';
+    }).join('') + '</tbody></table></div><p class="sticky-note">Fontes: Senado (legislação federal), ALESP (normas) e Prefeitura de SP (legislação municipal). Atualizado em ' + esc(dataHora(e.atualizadoEm)) + '.</p>';
     return h;
   }
 
@@ -287,8 +326,8 @@
     });
     h += '</tbody></table></div><h3 style="margin-top:20px">O que NÃO está coberto (e por quê)</h3><div class="card"><ul>' +
       '<li><b>Votos nominais da ALESP:</b> só existem votações de comissões em dados abertos; plenário não.</li>' +
-      '<li><b>Votos e gastos dos vereadores de SP:</b> votos só por download manual de XML; custos de gabinete (SisGV) sem parâmetros públicos documentados.</li>' +
-      '<li><b>Gastos pessoais de Presidente/Governador/Prefeito:</b> não são individualizados; mostramos o órgão. Governo de SP sem API.</li>' +
+      '<li><b>Votos nominais dos vereadores de SP:</b> só existem por download manual de XML na página de Votações do SPLEGIS (gastos de gabinete, via SisGV, estão integrados).</li>' +
+      '<li><b>Gastos pessoais de Presidente/Governador/Prefeito:</b> não são individualizados; mostramos o órgão. Governo de SP sem API. Decretos: Presidente (Senado), Governador (ALESP), Prefeito (Prefeitura de SP).</li>' +
       '<li><b>Presidência (CPGF/viagens):</b> exige chave gratuita do Portal da Transparência (secret <code>PORTAL_TRANSPARENCIA_KEY</code>).</li>' +
       '<li><b>Patrimônio declarado (TSE):</b> não implementado nesta versão.</li>' +
       '<li><b>Fichas de lei:</b> geradas por IA a partir da ementa oficial e identificadas como tal; exigem o secret <code>ANTHROPIC_API_KEY</code>. Sem ele, mostra-se a ementa oficial.</li></ul></div>' +
@@ -321,6 +360,8 @@
     if (go && !t.closest('a')) { location.hash = go.getAttribute('data-go'); return; }
     var set = t.closest && t.closest('[data-set]');
     if (set) { estado[set.dataset.set] = set.dataset.val; estado.ano = null; rota(); }
+    var sc = t.closest && t.closest('[data-set-casa]');
+    if (sc) { estado.casa = sc.getAttribute('data-set-casa'); }
     var back = t.closest && t.closest('[data-back]');
     if (back) { e.preventDefault(); history.length > 1 ? history.back() : (location.hash = '#/parlamentares'); }
   });
@@ -335,6 +376,7 @@
     var t = e.target;
     if (t.id === 'q') { estado.q = t.value; manterFoco(vParlamentares, 'q'); }
     else if (t.id === 'vq') { estado.vq = t.value; manterFoco(vVotacoes, 'vq'); }
+    else if (t.id === 'dq') { estado.dq = t.value; manterFoco(vExecutivo, 'dq'); }
     else if (t.classList.contains('vfiltro')) {
       var q = norm(t.value);
       Array.prototype.forEach.call(t.parentNode.querySelectorAll('.placar tr'), function (tr) { tr.hidden = q && tr.dataset.t.indexOf(q) < 0; });

@@ -6,10 +6,14 @@
   Governo de SP     -> sem API/CSV estável identificada; ver README ("Fontes que ficaram de fora").
 """
 import csv
+import html
+import json
 import io
 import os
 import re
+import subprocess
 import sys
+import urllib.parse
 import urllib.request
 from collections import defaultdict
 
@@ -38,12 +42,17 @@ def prefeitura():
 
     mais_nova = max(csvs, key=chave)
     print("  Prefeitura:", mais_nova["url"].rsplit("/", 1)[-1])
-    req = urllib.request.Request(mais_nova["url"], headers={"User-Agent": c.UA})
+    tmp = os.path.join(c.DATA, "_execucao.csv")
+    for tentativa in range(3):
+        r = subprocess.run(["curl", "-sL", "-m", "240", "--retry", "2", "-A", c.UA, "-o", tmp, mais_nova["url"]])
+        if r.returncode == 0 and os.path.exists(tmp) and os.path.getsize(tmp) > 1000:
+            break
+    else:
+        raise RuntimeError("download do CSV da Prefeitura falhou")
     por_orgao = defaultdict(lambda: defaultdict(float))
     ref = None
-    with urllib.request.urlopen(req, timeout=600) as r:
-        texto = io.TextIOWrapper(r, encoding="cp1252", newline="")
-        for row in csv.DictReader(texto, delimiter=";"):
+    with open(tmp, encoding="cp1252", newline="") as f:
+        for row in csv.DictReader(f, delimiter=";"):
             o = (row["Sigla_Orgao"], row["Ds_Orgao"])
             a = por_orgao[o]
             a["orcado"] += num(row["Vl_Orcado_Atualizado"])
@@ -51,6 +60,7 @@ def prefeitura():
             a["liquidado"] += num(row["Vl_Liquidado"])
             a["pago"] += num(row["Vl_Pago"])
             ref = (row["DataInicial"], row["DataFinal"], row["DataExtracao"])
+    os.remove(tmp)
     orgaos = [{"sigla": s, "nome": n, **{k: round(v, 2) for k, v in a.items()}} for (s, n), a in por_orgao.items()]
     orgaos.sort(key=lambda x: -x["pago"])
     return {"periodo": f"{ref[0]} a {ref[1]}" if ref else None, "extraidoEm": ref[2] if ref else None,
@@ -101,6 +111,89 @@ def presidencia():
             "cartao": sorted(gastos_cartao, key=lambda g: -g["valor"])[:100], "viagens": viagens[:100]}
 
 
+# Autoridades em exercício. REVISAR quando houver troca de mandato (posse em 01/01/2027 para
+# Presidente e Governador, após as eleições de out/2026).
+AUTORIDADES = [
+    {"id": "presidente", "cargo": "Presidente da República", "nome": "Luiz Inácio Lula da Silva", "partido": "PT",
+     "desde": "01/01/2023", "salarioCargo": "Presidente da República", "decretos": "decretosPresidente"},
+    {"id": "governador", "cargo": "Governador de São Paulo", "nome": "Tarcísio de Freitas", "partido": "REPUBLICANOS",
+     "desde": "01/01/2023", "salarioCargo": "Governador de São Paulo", "decretos": "decretosGovernador"},
+    {"id": "prefeito", "cargo": "Prefeito de São Paulo", "nome": "Ricardo Nunes", "partido": "MDB",
+     "desde": "16/05/2021", "salarioCargo": "Prefeito de São Paulo", "decretos": "decretosPrefeito"},
+]
+
+
+# ---------------------------------------------------------------- decretos
+def decretos_presidente(limite=80):
+    """Decretos numerados do ano corrente (API de legislação federal do Senado)."""
+    ano = c.agora().year
+    d = c.get_json(f"https://legis.senado.leg.br/dadosabertos/legislacao/lista?tipo=DEC&ano={ano}")
+    docs = d["ListaDocumento"]["documentos"]["documento"]
+    docs = docs if isinstance(docs, list) else [docs]
+    saida = [{
+        "titulo": x["normaNome"], "data": x["dataassinatura"], "ementa": x.get("ementa"),
+        "url": f"https://legis.senado.leg.br/norma/{x['id']}",
+    } for x in docs]
+    saida.sort(key=lambda x: (x["data"][6:], x["data"][3:5], x["data"][:2]), reverse=True)
+    return saida[:limite]
+
+
+def decretos_governador(limite=80):
+    """Decretos do Executivo estadual (normas da ALESP: tipo 3 = Decreto, promulgação 'E').
+    O arquivo completo tem 64 MB, mas vem do mais novo para o mais antigo: baixamos só o começo."""
+    url = "https://www3.al.sp.gov.br/repositorio/dados-abertos/output/json/normas.json"
+    bruto = subprocess.run(["curl", "-sL", "-m", "120", "-r", "0-6000000", "-A", c.UA, url],
+                           capture_output=True).stdout.decode("utf-8", "ignore")
+    i = bruto.find("[")
+    dec_json, ano, saida, pos = json.JSONDecoder(), str(c.agora().year), [], i + 1
+    while len(saida) < 4000:
+        j = bruto.find("{", pos)
+        if j < 0:
+            break
+        try:
+            n, pos = dec_json.raw_decode(bruto, j)
+        except ValueError:  # fim do trecho baixado (objeto cortado)
+            break
+        if n["data"][:4] < ano:
+            break
+        if n.get("idTipo") == "3" and n.get("promulg") == "E" and n["data"][:4] == ano:
+            saida.append(n)
+    saida.sort(key=lambda n: (n["data"], int(n["numero"] or 0)), reverse=True)
+    return [{
+        "titulo": f"Decreto nº {n['numero']}", "data": c_data(n["data"]), "ementa": n.get("ementa"),
+        "url": n.get("urlFicha"),
+    } for n in saida[:limite]]
+
+
+def c_data(iso):
+    return f"{iso[8:10]}/{iso[5:7]}/{iso[:4]}"
+
+
+def decretos_prefeito(paginas=6):
+    """Decretos municipais (legislacao.prefeitura.sp.gov.br), páginas de 10, mais recentes primeiro."""
+    base = "https://legislacao.prefeitura.sp.gov.br"
+    ano = c.agora().year
+    saida = []
+    for pg in range(1, paginas + 1):
+        rota = "/busca" if pg == 1 else f"/busca/pg/{pg}"
+        url = f"{base}{rota}?ano-inicial={ano}&tipo[]=DECRETO"
+        txt = subprocess.run(["curl", "-sL", "-g", "-m", "60", "-A", "Mozilla/5.0 RadarPolitico", url],
+                             capture_output=True).stdout.decode("utf-8", "ignore")
+        achou = re.findall(r'<div class="bx-resultado">\s*<a href="(/leis/[^"]+)">\s*<h4>(.*?)</h4>\s*<p>(.*?)</p>',
+                           txt, re.S)
+        if not achou:
+            break
+        for href, titulo, ementa in achou:
+            titulo = html.unescape(re.sub(r"\s+", " ", titulo)).strip()
+            m = re.search(r"de (\d{1,2}) de (\w+) de (\d{4})", titulo, re.I)
+            meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro",
+                     "outubro", "novembro", "dezembro"]
+            data = f"{int(m.group(1)):02d}/{meses.index(m.group(2).lower()) + 1:02d}/{m.group(3)}" if m and m.group(2).lower() in meses else None
+            saida.append({"titulo": titulo.title().replace(" De ", " de ").replace("Nº", "nº"), "data": data,
+                          "ementa": html.unescape(re.sub(r"\s+", " ", ementa)).strip(), "url": base + href})
+    return saida
+
+
 def main():
     print("Executivo")
     antigo = c.carregar("executivo.json", {})
@@ -115,8 +208,17 @@ def main():
     except Exception as e:
         print(f"  Presidência falhou: {e}", file=sys.stderr)
         out["presidencia"] = antigo.get("presidencia")
+    out["autoridades"] = AUTORIDADES
     out["governadorSP"] = {"disponivel": False,
                            "motivo": "O portal transparencia.sp.gov.br não expõe API; a consulta é manual."}
+    for chave, fn in (("decretosPresidente", decretos_presidente), ("decretosGovernador", decretos_governador),
+                      ("decretosPrefeito", decretos_prefeito)):
+        try:
+            out[chave] = fn()
+            print(f"  {chave}: {len(out[chave])}")
+        except Exception as e:
+            print(f"  {chave} falhou: {e}", file=sys.stderr)
+            out[chave] = antigo.get(chave, [])
     c.salvar("executivo.json", out)
 
 

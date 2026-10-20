@@ -11,10 +11,10 @@ JSON em `data/`. Cada commit dispara o deploy no Netlify.
 | Câmara dos Deputados | sim (plenário, 120 dias) | CEAP | sim |
 | Senado | sim (120 dias) | CEAPS | sim |
 | ALESP | **não** (só comissões em dados abertos) | verba de gabinete | sim |
-| Vereadores SP | **pendente** | **pendente** | sim |
-| Presidente | – | CPGF/viagens (exige chave) | sim |
-| Governador SP | – | **sem API** | sim |
-| Prefeito SP | – | execução orçamentária por órgão | sim |
+| Vereadores SP | **pendente** (só XML manual) | verba de gabinete (SisGV) | sim |
+| Presidente (Lula) | decretos (Senado) | CPGF/viagens (exige chave) | sim |
+| Governador SP (Tarcísio) | decretos (ALESP) | **sem API** | sim |
+| Prefeito SP (Nunes) | decretos (Prefeitura) | execução orçamentária por órgão | sim |
 
 Fichas de lei (resumo rápido + o que faz / quem ganha / quem paga / impacto / dois lados):
 geradas por IA a partir da ementa (`scripts/gerar_fichas.py`) quando `ANTHROPIC_API_KEY` existe.
@@ -36,3 +36,6 @@ Sem a chave, o site mostra a ementa oficial. Toda ficha gerada é identificada c
 
 ## Salários
 `data/salarios.json` é estático. Revisar e citar a norma ao atualizar.
+
+## Autoridades
+Nomes do Presidente, Governador e Prefeito ficam em `AUTORIDADES` em `scripts/collect_executivo.py`. Revisar na troca de mandato (posse em 01/01/2027).
