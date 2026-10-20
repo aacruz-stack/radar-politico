@@ -1,5 +1,5 @@
 import Anotacoes from './Anotacoes'
-import { IconeCheck, IconeSeta, IconeVoltar, IconeLampada } from './Icones'
+import { IconeCheck, IconeSeta, IconeVoltar, IconeLampada, IconePlay, IconeExterno } from './Icones'
 
 export default function Aula({ modulo, aula, anterior, proxima, concluida, anotacao, aoAlternarConcluida, aoSelecionar, aoSalvarAnotacao }) {
   return (
@@ -10,18 +10,39 @@ export default function Aula({ modulo, aula, anterior, proxima, concluida, anota
       <h1 className="mt-1 text-xl font-bold text-balance sm:text-2xl">{aula.titulo}</h1>
       <p className="mt-1 text-sm text-zinc-500">{modulo.titulo}</p>
 
-      {/* Player do YouTube */}
-      <div className="mt-5 aspect-video overflow-hidden rounded-xl border border-zinc-800 bg-black shadow-2xl shadow-brand-500/5">
-        <iframe
-          key={aula.videoId}
-          className="size-full"
-          src={`https://www.youtube.com/embed/${aula.videoId}?rel=0&modestbranding=1`}
-          title={aula.titulo}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          referrerPolicy="strict-origin-when-cross-origin"
-          allowFullScreen
-        />
-      </div>
+      {/* Player do YouTube. Como Artifact do claude.ai não é possível embutir o vídeo,
+          então a capa leva ao YouTube (no celular, abre direto no app). */}
+      {__ARTIFACT__ ? (
+        <a
+          href={`https://www.youtube.com/watch?v=${aula.videoId}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group relative mt-5 flex aspect-video max-w-full flex-col items-center justify-center gap-4 overflow-hidden rounded-xl border border-zinc-800 bg-[radial-gradient(ellipse_at_top,var(--color-brand-600)_0%,transparent_60%),linear-gradient(160deg,#18181b,#09090b)] p-6 text-center shadow-2xl shadow-brand-500/5 focus-visible:outline-2 focus-visible:outline-brand-400"
+        >
+          <span className="pointer-events-none absolute -right-4 -bottom-10 text-[11rem] leading-none font-black text-white/[0.04] select-none sm:text-[16rem]">
+            {String(aula.moduloIndex + 1).padStart(2, '0')}
+          </span>
+          <span className="grid size-16 place-items-center rounded-full bg-red-600 text-white shadow-lg shadow-red-900/40 transition-transform group-hover:scale-110 sm:size-20">
+            <IconePlay className="size-7 translate-x-0.5 fill-current sm:size-9" />
+          </span>
+          <span className="flex items-center gap-1.5 text-sm font-semibold text-zinc-100 sm:text-base">
+            Assistir no YouTube <IconeExterno className="size-4" />
+          </span>
+          <span className="max-w-md text-xs text-zinc-400 sm:text-sm">Abre em nova aba. Depois volte aqui para marcar como concluída e anotar.</span>
+        </a>
+      ) : (
+        <div className="mt-5 aspect-video overflow-hidden rounded-xl border border-zinc-800 bg-black shadow-2xl shadow-brand-500/5">
+          <iframe
+            key={aula.videoId}
+            className="size-full"
+            src={`https://www.youtube.com/embed/${aula.videoId}?rel=0&modestbranding=1`}
+            title={aula.titulo}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            referrerPolicy="strict-origin-when-cross-origin"
+            allowFullScreen
+          />
+        </div>
+      )}
 
       {/* Ações */}
       <div className="mt-4 flex flex-wrap items-center gap-3">

@@ -1,30 +1,14 @@
-import { useRef } from 'react'
-import { IconeMenu, IconeDownload, IconeUpload, IconeTrofeu } from './Icones'
-import { exportarDados, importarDados } from '../storage'
+import { IconeMenu, IconeTrofeu, IconeNuvem } from './Icones'
 
-export default function Header({ percentual, concluidas, total, aoAlternarSidebar }) {
-  const inputArquivo = useRef(null)
+const NUVEM = {
+  local: { texto: 'Salvo neste dispositivo', cor: 'text-zinc-500', ponto: 'bg-zinc-500' },
+  conectando: { texto: 'Conectando…', cor: 'text-zinc-400', ponto: 'bg-amber-400 animate-pulse' },
+  sincronizado: { texto: 'Sincronizado na sua conta', cor: 'text-emerald-400', ponto: 'bg-emerald-400' },
+  erro: { texto: 'Sem sincronizar (salvo aqui)', cor: 'text-amber-400', ponto: 'bg-amber-400' },
+}
 
-  function baixarBackup() {
-    const blob = new Blob([JSON.stringify(exportarDados(), null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = Object.assign(document.createElement('a'), { href: url, download: 'trilha-dados-backup.json' })
-    a.click()
-    URL.revokeObjectURL(url)
-  }
-
-  async function restaurarBackup(e) {
-    const arquivo = e.target.files?.[0]
-    if (!arquivo) return
-    try {
-      importarDados(JSON.parse(await arquivo.text()))
-      window.location.reload()
-    } catch {
-      alert('Arquivo de backup inválido.')
-    }
-    e.target.value = ''
-  }
-
+export default function Header({ percentual, concluidas, total, nuvem, aoAlternarSidebar }) {
+  const status = NUVEM[nuvem]
   return (
     <header className="shrink-0 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur">
       <div className="flex h-16 items-center gap-3 px-4">
@@ -46,15 +30,11 @@ export default function Header({ percentual, concluidas, total, aoAlternarSideba
           </div>
         </div>
 
-        <div className="ml-auto flex items-center gap-1">
-          <button onClick={baixarBackup} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" title="Exportar progresso e anotações">
-            <IconeDownload />
-          </button>
-          <button onClick={() => inputArquivo.current?.click()} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" title="Importar backup">
-            <IconeUpload />
-          </button>
-          <input ref={inputArquivo} type="file" accept="application/json" className="hidden" onChange={restaurarBackup} />
-        </div>
+        <p className={`ml-auto flex items-center gap-2 text-xs ${status.cor}`} title={status.texto}>
+          <IconeNuvem className="size-4" />
+          <span className="hidden sm:inline">{status.texto}</span>
+          <span className={`size-2 rounded-full ${status.ponto}`} />
+        </p>
       </div>
 
       {/* Barra de progresso geral da trilha */}

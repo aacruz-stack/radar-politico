@@ -7,7 +7,10 @@
   --color-brand-600: #7c3aed;
 }
 
-html { color-scheme: dark; }
+/* Tema escuro único, por escolha: fundo e cores definidos explicitamente. */
+:root { color-scheme: dark; }
+html, body, #root { height: 100%; }
+body { margin: 0; background: #09090b; color: #f4f4f5; }
 
 /* Scrollbar discreta no tema escuro */
 * { scrollbar-width: thin; scrollbar-color: #3f3f46 transparent; }

@@ -1,17 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Header from './components/Header'
 import Sidebar from './components/Sidebar'
 import Aula from './components/Aula'
 import { trilha, todasAulas } from './data/trilha'
-import { gravar, usePersistente } from './storage'
+import { useProgresso } from './sync'
 
 const desktop = () => window.matchMedia('(min-width: 1024px)').matches
-const aulaDoHash = () => todasAulas.find((a) => `#/aula/${a.id}` === window.location.hash)
+// Link direto para uma aula: ...#m5-a2 (aceita também o formato antigo #/aula/m5-a2).
+const aulaDoHash = () => todasAulas.find((a) => window.location.hash.replace('#/aula/', '#') === `#${a.id}`)
 
 export default function App() {
-  const [concluidas, setConcluidas] = usePersistente('concluidas', {})
-  const [anotacoes, setAnotacoes] = usePersistente('anotacoes', {})
-  const [ultimaAula, setUltimaAula] = usePersistente('ultima-aula', null)
+  const [estado, atualizar, nuvem] = useProgresso()
+  const { concluidas, anotacoes, ultima: ultimaAula } = estado
   const [sidebarAberta, setSidebarAberta] = useState(desktop)
 
   // Aula inicial: link direto (#/aula/id) → última assistida → primeira não concluída.
@@ -23,9 +23,13 @@ export default function App() {
   )
 
   useEffect(() => {
-    setUltimaAula(aulaId)
-    if (window.location.hash !== `#/aula/${aulaId}`) history.replaceState(null, '', `#/aula/${aulaId}`)
-  }, [aulaId, setUltimaAula])
+    atualizar((e) => (e.ultima === aulaId ? e : { ...e, ultima: aulaId }))
+    try {
+      if (window.location.hash !== `#${aulaId}`) history.replaceState(null, '', `#${aulaId}`)
+    } catch {
+      // Dentro do visualizador do claude.ai a URL não pode ser alterada.
+    }
+  }, [aulaId, atualizar])
 
   useEffect(() => {
     const aoMudarHash = () => {
@@ -50,29 +54,23 @@ export default function App() {
   }, [])
 
   const alternarConcluida = useCallback(
-    (id) => setConcluidas((atual) => ({ ...atual, [id]: !atual[id] })),
-    [setConcluidas],
+    (id) => atualizar((e) => ({ ...e, concluidas: { ...e.concluidas, [id]: !e.concluidas[id] } })),
+    [atualizar],
   )
 
-  // Grava a anotação de forma síncrona: o salvamento pode acontecer ao fechar a aba,
-  // quando não haverá novo render para o efeito do usePersistente rodar.
-  const anotacoesRef = useRef(anotacoes)
   const salvarAnotacao = useCallback(
-    (id, texto) => {
-      const novas = { ...anotacoesRef.current, [id]: texto }
-      anotacoesRef.current = novas
-      gravar('anotacoes', novas)
-      setAnotacoes(novas)
-    },
-    [setAnotacoes],
+    (id, texto) =>
+      atualizar((e) => (e.anotacoes[id] === texto ? e : { ...e, anotacoes: { ...e.anotacoes, [id]: texto } })),
+    [atualizar],
   )
 
   return (
-    <div className="flex h-dvh flex-col">
+    <div className="flex h-full flex-col">
       <Header
         percentual={percentual}
         concluidas={totalConcluidas}
         total={todasAulas.length}
+        nuvem={nuvem}
         aoAlternarSidebar={() => setSidebarAberta((v) => !v)}
       />
       <div className="flex min-h-0 flex-1">

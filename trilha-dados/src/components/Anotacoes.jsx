@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { IconeNota, IconeDownload } from './Icones'
+import { baixar } from '../storage'
 
 // Bloco de anotações com salvamento automático (debounce) no localStorage.
 // O componente é remontado a cada aula (key={aula.id}), então o estado inicial vem de `texto`.
@@ -8,6 +9,11 @@ export default function Anotacoes({ aula, texto, aoSalvar }) {
   const [salvoEm, setSalvoEm] = useState(null)
   const timer = useRef(null)
   const pendente = useRef(null)
+
+  // Anotação chegou de outro dispositivo: mostra, se não houver digitação em andamento.
+  useEffect(() => {
+    if (pendente.current === null) setRascunho(texto)
+  }, [texto])
 
   // Ao trocar de aula ou fechar a aba, grava o que ainda estiver aguardando o debounce.
   useEffect(() => {
@@ -36,10 +42,7 @@ export default function Anotacoes({ aula, texto, aoSalvar }) {
   }
 
   function baixarMarkdown() {
-    const conteudo = `# ${aula.titulo}\n\nhttps://youtu.be/${aula.videoId}\n\n${rascunho}\n`
-    const url = URL.createObjectURL(new Blob([conteudo], { type: 'text/markdown' }))
-    Object.assign(document.createElement('a'), { href: url, download: `anotacoes-${aula.id}.md` }).click()
-    URL.revokeObjectURL(url)
+    baixar(`anotacoes-${aula.id}.md`, `# ${aula.titulo}\n\nhttps://youtu.be/${aula.videoId}\n\n${rascunho}\n`)
   }
 
   const status =
@@ -48,7 +51,7 @@ export default function Anotacoes({ aula, texto, aoSalvar }) {
       : salvoEm
         ? `Salvo às ${salvoEm.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
         : rascunho
-          ? 'Salvo neste navegador'
+          ? 'Salvo'
           : ''
 
   return (

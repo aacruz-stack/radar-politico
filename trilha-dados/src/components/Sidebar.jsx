@@ -27,7 +27,7 @@ export default function Sidebar({ aberta, aulaAtualId, moduloAtualId, concluidas
 
       <aside
         className={`fixed inset-y-0 left-0 z-40 w-80 shrink-0 border-r border-zinc-800 bg-zinc-900 transition-[transform,margin] duration-300
-          lg:static lg:z-0 lg:h-full
+          pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] lg:static lg:z-0 lg:h-full lg:pt-0 lg:pb-0
           ${aberta ? 'translate-x-0' : '-translate-x-full lg:-ml-80'}`}
       >
         <div className="flex h-full flex-col">
